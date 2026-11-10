@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session Platform Incident Console</title>
+<style>
+  :root {
+    --bg: #0b1015;
+    --panel: #121a22;
+    --panel2: #0e151c;
+    --edge: #202d3a;
+    --fg: #d9e4ee;
+    --dim: #8aa0b4;
+    --accent: #4cc2ff;
+    --accent-dim: #1d4a63;
+    --ok: #3ecf8e;
+    --warn: #e8b34b;
+    --bad: #f16a6a;
+    --chip: #16222d;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  :root[data-hc="on"] {
+    --bg: #000000;
+    --panel: #0d1117;
+    --panel2: #000000;
+    --edge: #64748b;
+    --fg: #ffffff;
+    --dim: #c3cfda;
+    --accent: #66d9ff;
+    --accent-dim: #2b7a9e;
+    --ok: #4ade80;
+    --warn: #ffd166;
+    --bad: #ff8585;
+    --chip: #10161d;
+    color-scheme: dark;
+  }
+  :root[data-hc="on"] .chip, :root[data-hc="on"] .status { border: 1px solid currentColor; }
+  :root[data-hc="on"] .alert-card { border-left-width: 4px; }
+  :root[data-hc="on"] a { text-decoration: underline; }
+  [hidden] { display: none !important; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 0 16px 40px;
+  }
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--edge);
+    margin-bottom: 14px;
+  }
+  .svc {
+    font-weight: 700;
+    letter-spacing: .02em;
+  }
+  .svc small { color: var(--dim); font-weight: 400; }
+  .scs { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+  .sc {
+    font: inherit;
+    font-size: 14.5px;
+    color: var(--dim);
+    background: var(--chip);
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    padding: 4px 11px;
+    cursor: pointer;
+  }
+  .sc.active { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  .clock { color: var(--dim); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .hc {
+    font: inherit;
+    font-size: 14.5px;
+    color: var(--dim);
+    background: var(--panel2);
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    padding: 4px 11px;
+    cursor: pointer;
+  }
+  [data-hc="on"] .hc { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+  .brief {
+    color: var(--dim);
+    font-size: 14.5px;
+    margin: 0 0 10px;
+  }
+  .brief strong { color: var(--fg); }
+
+  .tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .tool {
+    font: inherit;
+    font-size: 15px;
+    color: var(--dim);
+    background: var(--panel2);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  .tool.active { color: var(--accent); border-color: var(--accent-dim); background: var(--panel); font-weight: 600; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .panel h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--dim);
+    font-weight: 600;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+  .minw { min-width: 0; }
+
+  .alert-card {
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-left: 3px solid var(--dim);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .alert-card.bad { border-left-color: var(--bad); }
+  .alert-card.warn { border-left-color: var(--warn); }
+  .alert-card .top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .chip {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--chip);
+    color: var(--dim);
+  }
+  .chip.bad { color: var(--bad); }
+  .chip.warn { color: var(--warn); }
+  .chip.ok { color: var(--ok); }
+  .alert-card .name { font-weight: 600; }
+  .alert-card .meta { color: var(--dim); font-size: 14.5px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .tile {
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .tile .v { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile .v-bad { color: var(--bad); }
+  .tile .v-warn { color: var(--warn); }
+  .tile .v-ok { color: var(--ok); }
+  .tile .l { color: var(--dim); font-size: 14px; margin-top: 2px; }
+
+  .chartbox { overflow-x: auto; }
+  svg { max-width: 100%; display: block; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--dim); font-size: 14px; margin-top: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th {
+    text-align: left;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--dim);
+    font-weight: 600;
+    padding: 6px 10px 6px 0;
+    border-bottom: 1px solid var(--edge);
+  }
+  td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--edge); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; }
+  .bar-track { background: var(--panel2); border-radius: 3px; height: 8px; width: 100%; max-width: 220px; overflow: hidden; }
+  .bar-fill { display: block; height: 100%; border-radius: 3px; }
+  .bars { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+  .logs { font-family: var(--mono); font-size: 14px; }
+  .logfilter {
+    font: inherit;
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--panel2);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    color: var(--fg);
+    padding: 7px 10px;
+    margin-bottom: 10px;
+  }
+  .logfilter::placeholder { color: var(--dim); }
+  .logrow { display: flex; gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--panel2); }
+  .logrow .t { color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .logrow .sev { white-space: nowrap; font-weight: 700; width: 4.5em; }
+  .sev-INFO { color: var(--dim); }
+  .sev-WARN { color: var(--warn); }
+  .sev-ERROR { color: var(--bad); }
+  .logrow .m { min-width: 0; overflow-wrap: anywhere; }
+  .logrow .m .dur { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .logwrap { overflow-x: auto; }
+  .logcount { color: var(--dim); font-size: 14px; margin-top: 6px; }
+
+  code, .mono { font-family: var(--mono); font-size: .92em; }
+  pre.code {
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.55;
+    background: var(--panel2);
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    margin: 0;
+  }
+  pre.code .k { color: #7dd3fc; }
+  pre.code .cm { color: #7f93a8; font-style: italic; }
+  pre.code .ty { color: #a5b4fc; }
+  pre.code .n { color: #86efac; }
+  pre.code .s { color: #fbbf24; }
+  .note { color: var(--dim); font-size: 14.5px; margin-top: 8px; }
+  .note strong { color: var(--fg); }
+  .note.gap { border-left: 3px solid var(--warn); padding-left: 10px; }
+
+  .keynote {
+    border-left: 3px solid var(--accent);
+    background: var(--panel2);
+    border-radius: 0 8px 8px 0;
+    padding: 8px 12px;
+    font-size: 14.5px;
+    margin-top: 10px;
+    color: var(--dim);
+  }
+  .keynote strong { color: var(--fg); }
+
+  .incident-banner {
+    display: flex; align-items: baseline; gap: 10px;
+    background: var(--chip);
+    border: 1px solid var(--edge);
+    border-left: 3px solid var(--bad);
+    border-radius: 0 8px 8px 0;
+    padding: 9px 14px;
+    margin: 0 0 12px;
+    font-size: 15px;
+    color: var(--fg);
+  }
+  .incident-banner .ib-tag {
+    font-size: 14px; font-weight: 700; letter-spacing: .08em; color: var(--bad);
+    white-space: nowrap;
+  }
+
+  .tl { list-style: none; margin: 0; padding: 0; }
+  .tl li { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--panel2); }
+  .tl li:last-child { border-bottom: none; }
+  .tl .d { color: var(--dim); white-space: nowrap; min-width: 4.5em; font-variant-numeric: tabular-nums; }
+  .tl .e { min-width: 0; overflow-wrap: anywhere; }
+
+  .runbook li { margin: 6px 0; }
+  .runbook .cost { color: var(--dim); font-size: 14.5px; }
+  
+  .msgs .m-line { padding: 8px 0; border-bottom: 1px solid var(--panel2); }
+  .msgs .who { color: var(--accent); font-weight: 600; font-size: 14.5px; }
+  .msgs .when { color: var(--dim); font-size: 14px; margin-left: 8px; font-variant-numeric: tabular-nums; }
+  .msgs .txt { margin-top: 3px; }
+  .status {
+    display: inline-block;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    padding: 1px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .st-closed { background: #10301f; color: var(--ok); }
+  .st-review { background: #33290f; color: var(--warn); }
+  .st-open { background: #3a1517; color: var(--bad); }
+
+  footer { color: var(--dim); font-size: 14px; border-top: 1px solid var(--edge); padding-top: 12px; }
+
+  /* Neutral state chips and ticket statuses: no red/green meaning */
+  .chip.bad, .chip.warn, .chip.ok { color: var(--dim); }
+  .chip { border: 1px solid var(--edge); }
+  .st-closed, .st-review, .st-open { background: var(--chip); color: var(--fg); border: 1px solid var(--edge); }
+  .alert-card.bad, .alert-card.warn { border-left-color: var(--accent-dim); }
+  .tile .v-bad, .tile .v-warn, .tile .v-ok { color: var(--fg); }
+  .incident-banner { border-left-color: var(--accent); }
+  .incident-banner .ib-tag { color: var(--accent); }
+  .sev-WARN, .sev-ERROR { color: var(--fg); }
+  .sev-DEBUG { color: var(--dim); }
+  .ticket { background: var(--panel); border: 1px solid var(--edge); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
+  .ticket .th { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; margin-bottom: 6px; }
+  .ticket .id { font-family: var(--mono); color: var(--accent); }
+  .ticket .subj { font-weight: 600; }
+  .ticket .meta { color: var(--dim); font-size: 14px; margin-bottom: 8px; }
+  .ticket .cm { border-top: 1px solid var(--edge); padding: 8px 0 2px; }
+  .ticket .cm .who { color: var(--accent); font-weight: 600; font-size: 14.5px; }
+  .ticket .cm .when { color: var(--dim); font-size: 14px; margin-left: 8px; }
+  .scroll { overflow-x: auto; }
+  td.l, th.l { text-align: left; }
+  tr.sep td { border-top: 2px solid var(--edge); }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <span class="svc">session-keeper <small>· incident console</small></span>
+  <span class="clock" id="clock">All times UTC · now = Tue 2027-03-09 15:10</span>
+  <button class="hc" id="hcToggle" type="button" aria-pressed="false" style="margin-left:auto">High contrast</button>
+</header>
+
+<nav class="tools" id="tabs" aria-label="Console tabs">
+  <button class="tool active" data-tool="alerts">Alerts</button>
+  <button class="tool" data-tool="events">Events</button>
+  <button class="tool" data-tool="sessions">Sessions</button>
+  <button class="tool" data-tool="audit">Audit trail</button>
+  <button class="tool" data-tool="versions">Versions</button>
+  <button class="tool" data-tool="changes">Changes</button>
+  <button class="tool" data-tool="support">Support</button>
+  <button class="tool" data-tool="logs">Logs</button>
+  <button class="tool" data-tool="code">Code</button>
+</nav>
+
+<!-- ═════════════ ALERTS ═════════════ -->
+<section data-tool="alerts">
+  <div class="incident-banner"><span class="ib-tag">OPEN INCIDENT</span> Tuesday 2027-03-09 15:10 UTC · session platform · opened from customer ticket SUP-31877</div>
+  <div class="tiles">
+    <div class="tile"><div class="v">0.00%</div><div class="l">handler error ratio · 7 days</div></div>
+    <div class="tile"><div class="v">0</div><div class="l">dead-letter depth · all session topics</div></div>
+    <div class="tile"><div class="v">0.6 s</div><div class="l">consumer lag p99 · account.disabled</div></div>
+    <div class="tile"><div class="v">6 ms</div><div class="l">session store p99</div></div>
+    <div class="tile"><div class="v">41 ms</div><div class="l">token-service p99</div></div>
+  </div>
+  <div class="alert-card">
+    <div class="top"><span class="chip">OPEN · CUSTOMER REPORT</span><span class="name">SUP-31877 · Vantry Freight: disabled employee account still accessing data</span></div>
+    <div class="meta">Created 13:52 UTC · priority high · assigned to session-platform on-call</div>
+  </div>
+  <div class="alert-card warn">
+    <div class="top"><span class="chip">FIRING · LOW</span><span class="name">notify-relay TLS certificate expires in 41 days</span></div>
+    <div class="meta">Fired 2027-03-01 06:00 · expires 2027-04-19 · owner: messaging team</div>
+  </div>
+  <div class="alert-card warn">
+    <div class="top"><span class="chip">FIRING · LOW</span><span class="name">log-forwarder disk usage above 75% on 2 nodes</span></div>
+    <div class="meta">Fired 2027-03-07 22:14 · current 78% · owner: platform infrastructure</div>
+  </div>
+  <div class="alert-card">
+    <div class="top"><span class="chip">RESOLVED</span><span class="name">Federation provider connection failures (external)</span></div>
+    <div class="meta">2027-03-02 03:10 to 04:40 · 90 minutes · federated sign-ins failed, local sign-ins unaffected</div>
+  </div>
+  <div class="alert-card">
+    <div class="top"><span class="chip">RESOLVED</span><span class="name">audit-sink batch latency above 2 s</span></div>
+    <div class="meta">2027-03-07 11:02 to 11:19 · 17 minutes · self-resolved</div>
+  </div>
+  <div class="panel">
+    <h3>Alert rules configured for session-keeper</h3>
+    <table>
+      <thead><tr><th>Rule</th><th>Condition</th><th>Last fired</th></tr></thead>
+      <tbody>
+        <tr><td>Handler error ratio</td><td>above 1% for 5 min</td><td>2027-01-27</td></tr>
+        <tr><td>Dead-letter depth</td><td>above 0 for 5 min</td><td>2027-02-12</td></tr>
+        <tr><td>Consumer lag</td><td>p99 above 60 s for 5 min</td><td>2026-12-08</td></tr>
+        <tr><td>Session store latency</td><td>p99 above 50 ms for 10 min</td><td>2027-01-04</td></tr>
+        <tr><td>Token-service 5xx ratio</td><td>above 0.5% for 5 min</td><td>2027-02-03</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═════════════ EVENTS ═════════════ -->
+<section data-tool="events" hidden>
+  <p class="brief"><strong>account.disabled topic · window 2027-02-23 10:36 to 2027-03-09 15:10</strong> · producer version is read from each event header</p>
+  <div class="tiles">
+    <div class="tile"><div class="v">550</div><div class="l">events produced</div></div>
+    <div class="tile"><div class="v">550</div><div class="l">events consumed</div></div>
+    <div class="tile"><div class="v">0</div><div class="l">dead-lettered</div></div>
+    <div class="tile"><div class="v">341</div><div class="l">accounts with sessions revoked</div></div>
+    <div class="tile"><div class="v">4 ms</div><div class="l">handler time p50 · 11 ms p99</div></div>
+  </div>
+  <div class="panel minw">
+    <h3>By producer version · window</h3>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Producer version</th><th>Admin path</th><th class="num">Produced</th><th class="num">Consumed</th><th class="num">Dead-lettered</th><th class="num">Accounts with sessions revoked</th><th class="num">Revoked / produced</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">account-writer 4.2.0</td><td>Admin console</td><td class="num">412</td><td class="num">412</td><td class="num">0</td><td class="num">341</td><td class="num">82.8%</td></tr>
+        <tr><td class="mono">account-writer 3.9.1</td><td>Directory sync connector</td><td class="num">138</td><td class="num">138</td><td class="num">0</td><td class="num">0</td><td class="num">0.0%</td></tr>
+        <tr class="sep"><td colspan="2"><strong>Total</strong></td><td class="num">550</td><td class="num">550</td><td class="num">0</td><td class="num">341</td><td class="num">62.0%</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <div class="panel minw">
+    <h3>Same measure before the window</h3>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Period</th><th>Producer version</th><th>Admin path</th><th class="num">Produced</th><th class="num">Accounts with sessions revoked</th><th class="num">Revoked / produced</th></tr></thead>
+      <tbody>
+        <tr><td>Feb 9 to Feb 15</td><td class="mono">3.9.1</td><td>Directory sync connector</td><td class="num">62</td><td class="num">49</td><td class="num">79.0%</td></tr>
+        <tr><td>Feb 16 to Feb 22</td><td class="mono">3.9.1</td><td>Directory sync connector</td><td class="num">59</td><td class="num">47</td><td class="num">79.7%</td></tr>
+        <tr><td>Feb 16 to Feb 22</td><td class="mono">4.2.0</td><td>Admin console</td><td class="num">188</td><td class="num">156</td><td class="num">83.0%</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <div class="panel minw">
+    <h3>Share of disable events followed by a session revocation · daily · Feb 16 to Mar 9</h3>
+    <div class="chartbox"><svg id="chartRatio" viewBox="0 0 760 250" role="img" aria-label="Daily share of disable events followed by a session revocation, per producer version, 16 February to 9 March."></svg></div>
+    <div class="legend">
+      <span><i style="background:#4cc2ff"></i>account-writer 4.2.0</span>
+      <span><i style="background:#e8b34b"></i>account-writer 3.9.1</span>
+    </div>
+  </div>
+  <div class="panel minw">
+    <h3>Daily counts · window</h3>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Day</th><th class="num">4.2.0 produced / consumed</th><th class="num">4.2.0 revoked</th><th class="num">3.9.1 produced / consumed</th><th class="num">3.9.1 revoked</th></tr></thead>
+      <tbody id="dailyBody"></tbody>
+    </table>
+    </div>
+    <p class="note">The first row counts from 10:36, when the first session-keeper pod running 7.4.0 took partitions.</p>
+  </div>
+  <div class="panel minw">
+    <h3>Accounts enabled again after being disabled in the window</h3>
+    <table>
+      <thead><tr><th>Disable path</th><th class="num">Disabled in window</th><th class="num">Enabled again since</th><th class="num">Still disabled</th></tr></thead>
+      <tbody>
+        <tr><td>Admin console (4.2.0)</td><td class="num">412</td><td class="num">27</td><td class="num">385</td></tr>
+        <tr><td>Directory sync connector (3.9.1)</td><td class="num">138</td><td class="num">9</td><td class="num">129</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═════════════ SESSIONS ═════════════ -->
+<section data-tool="sessions" hidden>
+  <p class="brief"><strong>Session store snapshot · 2027-03-09 15:05</strong></p>
+  <div class="panel minw">
+    <h3>Session policy</h3>
+    <table>
+      <tbody>
+        <tr><td>Access token lifetime</td><td class="num">15 min</td></tr>
+        <tr><td>Token validation cache (token-service)</td><td class="num">10 min</td></tr>
+        <tr><td>Refresh token idle timeout</td><td class="num">72 h</td></tr>
+        <tr><td>Refresh token absolute lifetime</td><td class="num">30 days</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="panel minw">
+    <h3>Disabled accounts that still hold a live session or refresh token</h3>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Disabled</th><th>Path</th><th class="num">Accounts still disabled</th><th class="num">Holding live sessions</th></tr></thead>
+      <tbody>
+        <tr><td>Before 2027-02-23 10:36</td><td>Either</td><td class="num">3,906</td><td class="num">0</td></tr>
+        <tr><td>In window</td><td>Admin console (4.2.0)</td><td class="num">385</td><td class="num">0</td></tr>
+        <tr><td>In window</td><td>Directory sync connector (3.9.1)</td><td class="num">129</td><td class="num">52 accounts · 71 sessions</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <div class="panel minw">
+    <h3>Live sessions held by disabled accounts · end-of-day snapshots</h3>
+    <div class="chartbox"><svg id="chartLive" viewBox="0 0 760 230" role="img" aria-label="Number of live sessions held by disabled accounts at the end of each day, 22 February to 9 March."></svg></div>
+  </div>
+  <div class="grid2">
+    <div class="panel minw">
+      <h3>The 71 sessions by type</h3>
+      <table>
+        <tbody>
+          <tr><td>Web sessions</td><td class="num">38</td></tr>
+          <tr><td>Mobile refresh tokens</td><td class="num">24</td></tr>
+          <tr><td>API client tokens</td><td class="num">9</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel minw">
+      <h3>The 52 accounts by time since disable</h3>
+      <table>
+        <tbody>
+          <tr><td>Under 1 day</td><td class="num">6</td></tr>
+          <tr><td>1 to 3 days</td><td class="num">11</td></tr>
+          <tr><td>3 to 7 days</td><td class="num">15</td></tr>
+          <tr><td>7 to 14 days</td><td class="num">20</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel minw">
+    <h3>The 52 accounts by tenant</h3>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Tenant</th><th class="num">Accounts holding live sessions</th><th class="num">Live sessions, all accounts in tenant</th></tr></thead>
+      <tbody>
+        <tr><td>Vantry Freight <span class="mono">ten-vnt-2204</span></td><td class="num">9</td><td class="num">3,420</td></tr>
+        <tr><td>Corvane Labs</td><td class="num">7</td><td class="num">1,180</td></tr>
+        <tr><td>Halloran Municipal</td><td class="num">6</td><td class="num">2,760</td></tr>
+        <tr><td>Pinecrest Health Group</td><td class="num">5</td><td class="num">5,940</td></tr>
+        <tr><td>Stonebridge Dairy</td><td class="num">4</td><td class="num">830</td></tr>
+        <tr><td>Ostrander Credit Union</td><td class="num">4</td><td class="num">4,210</td></tr>
+        <tr><td>Tidewell Energy</td><td class="num">3</td><td class="num">2,050</td></tr>
+        <tr><td>10 other tenants (3 or fewer each)</td><td class="num">14</td><td class="num">18,510</td></tr>
+        <tr class="sep"><td><strong>17 tenants</strong></td><td class="num">52</td><td class="num">38,900</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">Platform-wide live sessions: 212,400.</p>
+  </div>
+</section>
+
+<!-- ═════════════ AUDIT TRAIL ═════════════ -->
+<section data-tool="audit" hidden>
+  <p class="brief"><strong>Audit sink · tenant ten-vnt-2204 · Friday 2027-03-05</strong> · retention 30 days</p>
+  <div class="panel minw">
+    <h3>acct-b2d931bd · contractor · disabled through the admin console</h3>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">16:21:55</td><td>sign_in</td><td>web · 203.0.113.54</td></tr>
+        <tr><td class="mono">16:48:40</td><td>account_disabled</td><td>source: admin console · actor: r.adeyemi</td></tr>
+        <tr><td class="mono">16:48:41</td><td>sessions_revoked</td><td>count 2</td></tr>
+        <tr><td class="mono">16:52:10</td><td>token_refresh_denied</td><td>reason: session_revoked · 203.0.113.54</td></tr>
+        <tr><td class="mono">16:52:25</td><td>token_refresh_denied</td><td>reason: session_revoked · 203.0.113.54</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <div class="panel minw">
+    <h3>acct-7c41e90c · d.lindqvist · disabled through the directory sync connector</h3>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Time (UTC)</th><th>Event</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">Fri 16:41:07</td><td>sign_in</td><td>mobile · 203.0.113.54</td></tr>
+        <tr><td class="mono">Fri 17:05:12</td><td>account_disabled</td><td>source: directory sync connector · actor: hr-sync-service</td></tr>
+        <tr><td class="mono">Fri 17:25:40</td><td>token_refresh</td><td>mobile · 203.0.113.54 · granted</td></tr>
+        <tr><td class="mono">Fri 17:41:02</td><td>token_refresh</td><td>mobile · 203.0.113.54 · granted</td></tr>
+        <tr><td class="mono">Fri 18:56:19</td><td>token_refresh</td><td>mobile · 203.0.113.54 · granted</td></tr>
+        <tr><td class="mono">Sat 09:12:44</td><td>token_refresh</td><td>mobile · 203.0.113.54 · granted</td></tr>
+        <tr><td class="mono">Sun 14:03:31</td><td>token_refresh</td><td>mobile · 203.0.113.54 · granted</td></tr>
+        <tr><td class="mono">Mon 08:49:58</td><td>token_refresh</td><td>web · 198.51.100.77 · granted</td></tr>
+        <tr><td class="mono">Mon 08:50:11</td><td>api_call</td><td>GET /v2/shipments/export · 200 · 18,204 rows</td></tr>
+        <tr><td class="mono">Mon 08:52:36</td><td>api_call</td><td>GET /v2/customers/export · 200 · 4,377 rows</td></tr>
+        <tr><td class="mono">Tue 13:44:03</td><td>token_refresh</td><td>mobile · 203.0.113.54 · granted</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">Rows shown are a selection. Successful token refreshes for this account after the disable: Fri 11, Sat 38, Sun 29, Mon 64, Tue 22 (up to 13:44), 164 in total.</p>
+  </div>
+  <div class="grid2">
+    <div class="panel minw">
+      <h3>Successful refreshes after disable · window</h3>
+      <table>
+        <thead><tr><th>Disable path</th><th class="num">Accounts</th><th class="num">Refreshes</th></tr></thead>
+        <tbody>
+          <tr><td>Admin console (4.2.0)</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>Directory sync connector (3.9.1)</td><td class="num">58</td><td class="num">5,612</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel minw">
+      <h3>API calls with those tokens · window</h3>
+      <table>
+        <thead><tr><th>Class</th><th class="num">Calls</th><th class="num">Accounts</th></tr></thead>
+        <tbody>
+          <tr><td>Read</td><td class="num">1,602</td><td class="num">29</td></tr>
+          <tr><td>Write</td><td class="num">152</td><td class="num">9</td></tr>
+          <tr><td>Export</td><td class="num">93</td><td class="num">7</td></tr>
+          <tr class="sep"><td>All calls</td><td class="num">1,847</td><td class="num">31</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <p class="note">The earliest events in the window leave the 30 day audit retention on 2027-03-25.</p>
+</section>
+
+<!-- ═════════════ VERSIONS ═════════════ -->
+<section data-tool="versions" hidden>
+  <p class="brief"><strong>Running versions · 2027-03-09 15:05</strong></p>
+  <div class="panel minw">
+    <h3>Services in the disable flow</h3>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Service</th><th>Pool</th><th>Version</th><th class="num">Pods</th><th>Running since</th><th>Event schema</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">account-writer</td><td>admin-ui</td><td class="mono">4.2.0</td><td class="num">6</td><td class="mono">2027-02-16 15:20</td><td>writes account.disabled v3</td></tr>
+        <tr><td class="mono">account-writer</td><td>sync connector</td><td class="mono">3.9.1</td><td class="num">4</td><td class="mono">2026-11-30 09:05</td><td>writes account.disabled v2</td></tr>
+        <tr><td class="mono">session-keeper</td><td>all</td><td class="mono">7.4.0</td><td class="num">8</td><td class="mono">2027-02-23 10:42</td><td>reads v2 and v3</td></tr>
+        <tr><td class="mono">token-service</td><td>all</td><td class="mono">11.2.0</td><td class="num">12</td><td class="mono">2027-01-19 14:30</td><td>none</td></tr>
+        <tr><td class="mono">audit-sink</td><td>all</td><td class="mono">2.18.3</td><td class="num">3</td><td class="mono">2027-03-03 09:30</td><td>reads audit.*</td></tr>
+        <tr><td class="mono">notify-relay</td><td>all</td><td class="mono">5.6.0</td><td class="num">4</td><td class="mono">2027-03-04 11:45</td><td>none</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="panel minw">
+      <h3>session-keeper libraries</h3>
+      <table>
+        <thead><tr><th>Library</th><th>Now</th><th>Previous release</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">wireforms</td><td class="mono">5.1.0</td><td class="mono">4.9.2</td></tr>
+          <tr><td class="mono">session-store-client</td><td class="mono">3.3.0</td><td class="mono">3.2.4</td></tr>
+          <tr><td class="mono">metrics-lite</td><td class="mono">1.8.1</td><td class="mono">1.8.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel minw">
+      <h3>Schema registry · subject account.disabled</h3>
+      <table>
+        <thead><tr><th>Version</th><th>Registered</th><th>Fields</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">v2</td><td class="mono">2026-06-04</td><td class="num">5</td></tr>
+          <tr><td class="mono">v3</td><td class="mono">2027-01-12</td><td class="num">6</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Compatibility mode: backward.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════ CHANGES ═════════════ -->
+<section data-tool="changes" hidden>
+  <p class="brief"><strong>Change history · session platform and neighbours · newest first</strong></p>
+  <div class="panel">
+    <ul class="tl">
+      <li><span class="d">03-04 11:45</span><span class="e"><strong>notify-relay 5.6.0.</strong> Template cache fix for reset emails. CHG-5588.</span></li>
+      <li><span class="d">03-03 09:30</span><span class="e"><strong>audit-sink 2.18.3.</strong> Batch size raised from 500 to 1,000 records. CHG-5581.</span></li>
+      <li><span class="d">03-02 09:12</span><span class="e"><strong>Log level override.</strong> session-keeper-7 set to DEBUG by on-call for an unrelated latency question. Other pods unchanged. Override has no expiry. CHG-5570.</span></li>
+      <li><span class="d">03-02 03:10</span><span class="e"><strong>External federation provider outage</strong> until 04:40. No deploys by this team during the outage. Provider post-incident note linked from the status page.</span></li>
+      <li><span class="d">02-26 16:00</span><span class="e"><strong>Dashboards.</strong> Added a session store hit-rate panel. CHG-5563.</span></li>
+      <li><span class="d">02-23 10:36</span><span class="e"><strong>session-keeper 7.4.0.</strong> Rolling deploy, 8 pods, first pod ready 10:36, last 10:42. Dependency refresh (wireforms 5.1.0, session-store-client 3.3.0). Fixes decode failures on payloads over 1 MB, which dead-lettered 7 events in the previous four weeks. No behaviour changes expected. CHG-5549.</span></li>
+      <li><span class="d">02-16 15:20</span><span class="e"><strong>account-writer 4.2.0, admin-ui pool.</strong> Disable events now carry the ids of the account's live sessions (schema v3). The sync connector pool stays on 3.9.1 until the sync connector contract review finishes. CHG-5531.</span></li>
+      <li><span class="d">01-19 14:30</span><span class="e"><strong>token-service 11.2.0.</strong> Routine upgrade. CHG-5502.</span></li>
+      <li><span class="d">01-12 10:00</span><span class="e"><strong>Schema registry.</strong> account.disabled v3 registered. CHG-5497.</span></li>
+      <li><span class="d">2026-11-30</span><span class="e"><strong>account-writer 3.9.1, sync connector pool.</strong> Fix for connector retry ordering. CHG-5402.</span></li>
+      <li><span class="d">2026-11-18</span><span class="e"><strong>token-service.</strong> Validation cache TTL changed from 300 s to 600 s to reduce session store reads. CHG-5388.</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═════════════ SUPPORT ═════════════ -->
+<section data-tool="support" hidden>
+  <p class="brief"><strong>Support queue · session platform · most recent first</strong></p>
+
+  <div class="ticket">
+    <div class="th"><span class="id">SUP-31877</span><span class="subj">Disabled employee account still accessing our data</span><span class="status st-open">OPEN</span></div>
+    <div class="meta">Vantry Freight · priority high · created Tue 13:52 · reporter R. Adeyemi, security</div>
+    <div>Our HR system disabled d.lindqvist's account on Friday 5 March at 17:05 UTC when the employment ended. Our log review shows activity from that account on Saturday, Sunday and Monday, including two exports on Monday at about 08:50 UTC from an IP address we do not recognise (198.51.100.77). We need to know today how this is possible, what else this account reached, and whether other accounts are affected. Our agreement requires us to report incidents like this to our regulator within 72 hours of becoming aware. We became aware at 13:30 UTC today.</div>
+    <div class="cm"><span class="who">R. Adeyemi</span><span class="when">Tue 14:05</span><div>Our HR system disables accounts through the directory sync connector, as set up with your onboarding team in 2025. Is that not a supported way to offboard? For what it is worth, a contractor we removed through the admin console the same afternoon lost access within a minute or two.</div></div>
+    <div class="cm"><span class="who">Support agent</span><span class="when">Tue 14:12</span><div>Escalated to session-platform on-call. Customer asked for the account ids and timestamps.</div></div>
+    <div class="cm"><span class="who">Customer success (internal)</span><span class="when">Tue 14:30</span><div>Vantry renews in five weeks. Their CISO has asked for a call at 17:00 UTC today. The executive sponsor on their side is the COO.</div></div>
+  </div>
+
+  <div class="ticket">
+    <div class="th"><span class="id">SUP-31905</span><span class="subj">Password reset emails arriving late</span><span class="status st-open">OPEN</span></div>
+    <div class="meta">Stonebridge Dairy · priority medium · created Mon 16:20 · assigned to messaging team</div>
+    <div>Reset emails take 15 to 20 minutes to arrive since last week. Users give up and ask the helpdesk to reset by hand.</div>
+  </div>
+
+  <div class="ticket">
+    <div class="th"><span class="id">SUP-31891</span><span class="subj">Audit export CSV columns in a different order</span><span class="status st-closed">CLOSED</span></div>
+    <div class="meta">Ostrander Credit Union · priority low · created Fri 10:05 · closed Fri 15:40</div>
+    <div>The column order of the audit export changed and broke our import. Resolution: documented column order is by name, not position. Customer updated their import.</div>
+  </div>
+
+  <div class="ticket">
+    <div class="th"><span class="id">SUP-31702</span><span class="subj">Offboarded contractor still signed in on mobile app</span><span class="status st-closed">CLOSED</span></div>
+    <div class="meta">Corvane Labs · priority medium · created Sat 02-27 09:40 · closed Mon 03-01 11:15</div>
+    <div>A contractor was offboarded on Friday and our admin can still see their phone signed in to the field app.</div>
+    <div class="cm"><span class="who">Support agent</span><span class="when">Sat 02-27 11:02</span><div>Mobile apps can keep a session until the token expires. Please allow up to 72 hours and tell us if it persists.</div></div>
+    <div class="cm"><span class="who">Support agent</span><span class="when">Mon 03-01 11:15</span><div>No reply from the customer. Closing.</div></div>
+  </div>
+</section>
+
+<!-- ═════════════ LOGS ═════════════ -->
+<section data-tool="logs" hidden>
+  <p class="brief"><strong>session-keeper logs · selected lines</strong> · INFO from all pods, DEBUG only where enabled</p>
+  <input class="logfilter" type="text" placeholder="Filter lines (account id, pod, text)" aria-label="Filter log lines">
+  <div class="panel logs">
+    <div class="logwrap" id="logRows"></div>
+  </div>
+  <div class="logcount"></div>
+</section>
+
+<!-- ═════════════ CODE ═════════════ -->
+<section data-tool="code" hidden>
+  <p class="brief"><strong>session-keeper 7.4.0 · event model and handler</strong></p>
+  <div class="panel minw">
+    <h3>AccountDisabled.java</h3>
+<pre class="code"><span class="k">record</span> <span class="ty">AccountDisabled</span>(
+    <span class="ty">String</span> eventId,
+    <span class="ty">String</span> tenantId,
+    <span class="ty">String</span> accountId,
+    <span class="ty">Instant</span> disabledAt,
+    <span class="ty">String</span> initiatedBy,
+    <span class="ty">List</span>&lt;<span class="ty">String</span>&gt; liveSessionIds) {}</pre>
+  </div>
+  <div class="panel minw">
+    <h3>DisabledAccountHandler.java</h3>
+<pre class="code"><span class="k">final class</span> <span class="ty">DisabledAccountHandler</span> {
+  <span class="k">private final</span> <span class="ty">SessionStore</span> store;
+  <span class="k">private final</span> <span class="ty">Counter</span> revoked;
+  <span class="k">private final</span> <span class="ty">AuditSink</span> audit;
+  <span class="k">private final</span> <span class="ty">DeadLetter</span> deadLetter;
+  <span class="k">private static final</span> <span class="ty">Logger</span> log = <span class="ty">Loggers</span>.of(<span class="ty">DisabledAccountHandler</span>.<span class="k">class</span>);
+
+  <span class="k">void</span> onRecord(<span class="ty">Record</span>&lt;<span class="ty">AccountDisabled</span>&gt; rec) {
+    <span class="k">try</span> {
+      handle(rec.value());
+    } <span class="k">catch</span> (<span class="ty">DecodeException</span> | <span class="ty">StoreException</span> e) {
+      deadLetter.send(rec, e);
+    }
+  }
+
+  <span class="k">void</span> handle(<span class="ty">AccountDisabled</span> ev) {
+    <span class="ty">List</span>&lt;<span class="ty">String</span>&gt; ids = ev.liveSessionIds();
+    <span class="k">int</span> count;
+    <span class="k">if</span> (ids == <span class="k">null</span>) {
+      log.debug(<span class="s">"skipped: no sessions field account={}"</span>, ev.accountId());
+      <span class="k">return</span>;
+    } <span class="k">else if</span> (ids.isEmpty()) {
+      count = store.revokeAllForAccount(ev.tenantId(), ev.accountId());
+    } <span class="k">else</span> {
+      count = <span class="n">0</span>;
+      <span class="k">for</span> (<span class="ty">String</span> id : ids) {
+        <span class="k">if</span> (store.revoke(ev.tenantId(), id, <span class="ty">Reason</span>.ACCOUNT_DISABLED)) {
+          count++;
+        }
+      }
+      store.revokeRefreshFamilies(ev.tenantId(), ids);
+    }
+    revoked.increment();
+    audit.record(ev.accountId(), <span class="s">"sessions_revoked"</span>, count);
+    log.debug(<span class="s">"revoked sessions={} account={}"</span>, count, ev.accountId());
+  }
+}</pre>
+  </div>
+</section>
+
+<footer>identity session platform · incident console · all names, numbers and dates are fictional</footer>
+
+<script>
+  (function () {
+    var HC_KEY = 'session-incident-console-hc';
+    var hcBtn = document.getElementById('hcToggle');
+    function setHC(on) {
+      document.documentElement.setAttribute('data-hc', on ? 'on' : 'off');
+      if (hcBtn) { hcBtn.setAttribute('aria-pressed', String(on)); }
+    }
+    var hcSaved = null;
+    try { hcSaved = localStorage.getItem(HC_KEY); } catch (e) {}
+    setHC(hcSaved === 'on');
+    if (hcBtn) {
+      hcBtn.addEventListener('click', function () {
+        var on = document.documentElement.getAttribute('data-hc') !== 'on';
+        setHC(on);
+        try { localStorage.setItem(HC_KEY, on ? 'on' : 'off'); } catch (e) {}
+      });
+    }
+
+    var sections = document.querySelectorAll('section[data-tool]');
+    var tools = document.querySelectorAll('#tabs .tool');
+    tools.forEach(function (t) {
+      t.addEventListener('click', function () {
+        tools.forEach(function (o) { o.classList.remove('active'); });
+        t.classList.add('active');
+        sections.forEach(function (s) { s.hidden = s.dataset.tool !== t.dataset.tool; });
+      });
+    });
+
+    /* Daily counts table */
+    var days = ['Feb 23 (from 10:36)', 'Feb 24', 'Feb 25', 'Feb 26', 'Feb 27', 'Feb 28', 'Mar 1', 'Mar 2', 'Mar 3', 'Mar 4', 'Mar 5', 'Mar 6', 'Mar 7', 'Mar 8', 'Mar 9 (to 15:10)'];
+    var cP = [31, 36, 34, 40, 11, 8, 33, 29, 35, 37, 42, 12, 9, 34, 21];
+    var cR = [26, 30, 28, 33, 9, 7, 27, 24, 29, 31, 35, 10, 7, 28, 17];
+    var kP = [9, 11, 12, 14, 3, 2, 10, 9, 12, 13, 17, 4, 3, 11, 8];
+    var body = document.getElementById('dailyBody');
+    if (body) {
+      body.innerHTML = days.map(function (d, i) {
+        return '<tr><td>' + d + '</td><td class="num">' + cP[i] + ' / ' + cP[i] + '</td><td class="num">' + cR[i] +
+          '</td><td class="num">' + kP[i] + ' / ' + kP[i] + '</td><td class="num">0</td></tr>';
+      }).join('');
+    }
+
+    /* Simple SVG line chart */
+    var NS = 'http://www.w3.org/2000/svg';
+    function el(name, attrs, text) {
+      var n = document.createElementNS(NS, name);
+      for (var k in attrs) { n.setAttribute(k, attrs[k]); }
+      if (text !== undefined) { n.textContent = text; }
+      return n;
+    }
+    function chart(id, labels, series, ymax, ticks, fmt) {
+      var svg = document.getElementById(id);
+      if (!svg) { return; }
+      var L = 52, R = 700, T = 14, B = 190;
+      var mono = 'ui-monospace, Menlo, monospace';
+      ticks.forEach(function (tv) {
+        var y = B - (tv / ymax) * (B - T);
+        svg.appendChild(el('line', { x1: L, x2: R, y1: y, y2: y, stroke: '#202d3a', 'stroke-width': 1 }));
+        svg.appendChild(el('text', { x: 6, y: y + 5, fill: '#8aa0b4', 'font-size': 14, 'font-family': mono }, fmt(tv)));
+      });
+      var n = labels.length;
+      function X(i) { return L + (i / (n - 1)) * (R - L); }
+      function Y(v) { return B - (v / ymax) * (B - T); }
+      labels.forEach(function (lab, i) {
+        if (lab) { svg.appendChild(el('text', { x: X(i) - 18, y: B + 22, fill: '#8aa0b4', 'font-size': 14, 'font-family': mono }, lab)); }
+      });
+      series.forEach(function (s) {
+        var d = s.v.map(function (v, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ',' + Y(v).toFixed(1); }).join(' ');
+        svg.appendChild(el('path', { d: d, fill: 'none', stroke: s.c, 'stroke-width': 2 }));
+      });
+    }
+    var rl = []; for (var i = 0; i < 22; i++) { rl.push(''); }
+    rl[0] = 'Feb 16'; rl[7] = 'Feb 23'; rl[14] = 'Mar 2'; rl[21] = 'Mar 9';
+    var newPre = [0.84, 0.83, 0.82, 0.85, 0.80, 0.83, 0.84];
+    var newWin = cR.map(function (r, i) { return r / cP[i]; });
+    var oldPre = [0.80, 0.77, 0.82, 0.78, 0.75, 0.80, 0.86];
+    var oldWin = [0.22]; for (var j = 1; j < 15; j++) { oldWin.push(0); }
+    chart('chartRatio', rl, [
+      { v: newPre.concat(newWin), c: '#4cc2ff' },
+      { v: oldPre.concat(oldWin), c: '#e8b34b' }
+    ], 1, [0, 0.25, 0.5, 0.75, 1], function (v) { return Math.round(v * 100) + '%'; });
+
+    var live = [0, 4, 9, 16, 24, 28, 30, 35, 41, 47, 55, 63, 66, 66, 69, 71];
+    var ll = []; for (var m = 0; m < live.length; m++) { ll.push(''); }
+    ll[0] = 'Feb 22'; ll[6] = 'Feb 28'; ll[11] = 'Mar 5'; ll[15] = 'Mar 9';
+    chart('chartLive', ll, [{ v: live, c: '#4cc2ff' }], 80, [0, 20, 40, 60, 80], function (v) { return String(v); });
+
+    /* Logs */
+    var logs = [
+      ['2027-03-09 15:08:41', 'INFO', 'session-keeper-3', 'consumed topic=account.disabled partition=2 offset=2918841 key=acct-90e1c4a7 took_ms=3'],
+      ['2027-03-09 15:06:12', 'INFO', 'session-keeper-5', 'heartbeat ok group=session-keeper generation=118 partitions=[4,5]'],
+      ['2027-03-09 14:52:30', 'INFO', 'session-keeper-1', 'consumed topic=account.disabled partition=0 offset=2918837 key=acct-3be07712 took_ms=5'],
+      ['2027-03-09 14:31:09', 'INFO', 'session-keeper-7', 'consumed topic=account.disabled partition=6 offset=2918830 key=acct-d4410f02 took_ms=4'],
+      ['2027-03-08 08:52:36', 'DEBUG', 'session-keeper-7', 'skipped: no sessions field account=acct-a18c55d0'],
+      ['2027-03-08 08:41:15', 'DEBUG', 'session-keeper-7', 'revoked sessions=1 account=acct-52f9be06'],
+      ['2027-03-08 03:17:50', 'WARN', 'session-keeper-2', 'session store call slow ms=120 op=revoke tenant=ten-hal-1190'],
+      ['2027-03-06 11:20:03', 'DEBUG', 'session-keeper-7', 'skipped: no sessions field account=acct-0f3d61e9'],
+      ['2027-03-06 09:02:47', 'DEBUG', 'session-keeper-7', 'revoked sessions=3 account=acct-c7a2d818'],
+      ['2027-03-05 17:05:12.904', 'INFO', 'session-keeper-7', 'consumed topic=account.disabled partition=5 offset=2916204 key=acct-7c41e90c took_ms=3'],
+      ['2027-03-05 17:05:12.903', 'DEBUG', 'session-keeper-7', 'skipped: no sessions field account=acct-7c41e90c'],
+      ['2027-03-05 16:48:41.221', 'INFO', 'session-keeper-7', 'consumed topic=account.disabled partition=1 offset=2916188 key=acct-b2d931bd took_ms=9'],
+      ['2027-03-05 16:48:41.220', 'DEBUG', 'session-keeper-7', 'revoked sessions=2 account=acct-b2d931bd'],
+      ['2027-03-05 15:12:09', 'DEBUG', 'session-keeper-7', 'skipped: no sessions field account=acct-e60b9d34'],
+      ['2027-03-05 14:30:58', 'DEBUG', 'session-keeper-7', 'revoked sessions=1 account=acct-1d85a0c3'],
+      ['2027-03-04 16:44:21', 'DEBUG', 'session-keeper-7', 'revoked sessions=2 account=acct-88b14e5f'],
+      ['2027-03-04 10:09:36', 'DEBUG', 'session-keeper-7', 'skipped: no sessions field account=acct-4a70c92b'],
+      ['2027-03-03 13:55:02', 'DEBUG', 'session-keeper-7', 'skipped: no sessions field account=acct-b9e2ff61'],
+      ['2027-03-03 09:31:18', 'INFO', 'session-keeper-4', 'consumer rebalance complete group=session-keeper generation=117 members=8'],
+      ['2027-03-02 09:12:30', 'INFO', 'session-keeper-7', 'log level override applied level=DEBUG source=oncall change=CHG-5570'],
+      ['2027-03-02 03:12:44', 'WARN', 'token-service-9', 'federation provider connect timeout provider=fedcore-eu attempt=3'],
+      ['2027-02-23 10:42:19', 'INFO', 'session-keeper-8', 'started version=7.4.0 group=session-keeper generation=116 partitions=[7]'],
+      ['2027-02-23 10:36:05', 'INFO', 'session-keeper-1', 'started version=7.4.0 group=session-keeper generation=109 partitions=[0]']
+    ];
+    var host = document.getElementById('logRows');
+    if (host) {
+      host.innerHTML = logs.map(function (r) {
+        return '<div class="logrow"><span class="t">' + r[0] + '</span><span class="sev sev-' + r[1] + '">' + r[1] +
+          '</span><span class="t">' + r[2] + '</span><span class="m">' + r[3] + '</span></div>';
+      }).join('');
+    }
+    document.querySelectorAll('.logfilter').forEach(function (input) {
+      var panel = input.nextElementSibling;
+      while (panel && !panel.classList.contains('logs')) { panel = panel.nextElementSibling; }
+      if (!panel) { return; }
+      var rows = panel.querySelectorAll('.logrow');
+      var counter = panel.parentElement.querySelector('.logcount');
+      input.addEventListener('input', function () {
+        var q = input.value.trim().toLowerCase();
+        var shown = 0;
+        rows.forEach(function (r) {
+          var hit = !q || r.textContent.toLowerCase().indexOf(q) !== -1;
+          r.hidden = !hit;
+          if (hit) { shown++; }
+        });
+        if (counter) { counter.textContent = q ? (shown + ' of ' + rows.length + ' lines') : ''; }
+      });
+    });
+  })();
+</script>
+</body>
+</html>
